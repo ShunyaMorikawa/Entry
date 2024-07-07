@@ -13,6 +13,10 @@
 #include "bullet.h"
 #include "enemy.h"
 #include "fade.h"
+#include "wall.h"
+#include "mapobject.h"
+#include "sound.h"
+#include "debugproc.h"
 
 //========================================
 //静的メンバ変数
@@ -24,7 +28,7 @@ CGame *CGame::m_pGame = nullptr;			// ゲームのポインタ
 //========================================
 namespace
 {
-	const int TransitionTime = 120;
+	const int TRANSITIONTIME = 120;
 }
 
 //========================================
@@ -32,8 +36,14 @@ namespace
 //========================================
 CGame::CGame() : 
 	m_bPause(false),
-	m_nTransition(0)
+	m_nTransition(0),
+	m_pObjectX(nullptr),
+	m_pIdxMesh(nullptr),
+	m_pField(nullptr),
+	m_pFade(nullptr),
+	m_pMobj(nullptr)
 {
+	m_pGame = nullptr;
 }
 
 //========================================
@@ -64,19 +74,37 @@ CGame *CGame::Create(void)
 HRESULT CGame::Init(void)
 {
 	// プレイヤー生成
-	m_pPlayer = CPlayer::Create("data//FILE//player.txt");
+	CPlayer::Create("data//FILE//player.txt");
 
 	// フィールド生成
 	m_pField = CField::Create();
 
 	// エネミー生成
-	m_pEnemy = CEnemy::Create("data//FILE//motion.txt");
+	CEnemy::Create("data//FILE//motion.txt");
+
+	// 壁生成
+	CWall::Create(D3DXVECTOR3(0.0f, 2000.0f, -4000.0f), D3DXVECTOR3(D3DX_PI * 0.5f, 0.0f, 0.0f));
+	CWall::Create(D3DXVECTOR3(0.0f, 2000.0f, 4000.0f), D3DXVECTOR3(D3DX_PI * 0.5f, D3DX_PI, 0.0f));
+	CWall::Create(D3DXVECTOR3(4000.0f, 2000.0f, 0.0f), D3DXVECTOR3(D3DX_PI * 0.5f,  -D3DX_PI * 0.5f, 0.0f));
+	CWall::Create(D3DXVECTOR3(-4000.0f, 2000.0f, 0.0f), D3DXVECTOR3(D3DX_PI * 0.5f,  D3DX_PI * 0.5f, 0.0f));
+
+	// マップオブジェクト生成
+	m_pMobj = CMapObject::Create();
 
 	// 遷移時間
 	m_nTransition = 0;
 
 	//ポーズの状態
 	m_bPause = false;
+
+	// サウンド情報取得
+	CSound* pSound = CManager::GetInstance()->GetSound();
+
+	// サウンド停止
+	pSound->Stop(CSound::SOUND_LABEL_BGM_TUTORIAL);
+
+	// サウンド再生
+	pSound->PlaySoundA(CSound::SOUND_LABEL_BGM_GAME);
 
 	return S_OK;
 }
@@ -95,17 +123,20 @@ void CGame::Uninit(void)
 void CGame::Update(void)
 {
 	// CInputKeyboard型のポインタ
-	CInputKeyboard* pInputKeyboard = nullptr;
-	pInputKeyboard = CManager::GetInstance()->GetInputKeyboard();
+	CInputKeyboard* pInputKeyboard = CManager::GetInstance()->GetInputKeyboard();
 
-	// 敵の体力取得
-	int EnemyLife = m_pEnemy->GetLife();
+	// プレイヤーの情報取得
+	CPlayer* pPlayer = CPlayer::GetInstance();
 
-	if (EnemyLife <= 0 || m_pPlayer == nullptr)
+	// 敵の情報取得
+	CEnemy* pEnemy = CEnemy::GetInstance();
+
+	if (pEnemy == nullptr || pPlayer == nullptr)
 	{// 敵かプレイヤーの体力が0以下になったら
 		m_nTransition++;
 
-		if (m_nTransition >= TransitionTime)
+		if (m_nTransition > TRANSITIONTIME ||
+			pInputKeyboard->GetTrigger(DIK_RETURN))
 		{
 			// 画面遷移(フェード)
 			CManager::GetInstance()->GetFade()->SetFade(CScene::MODE_TITLE);
@@ -114,12 +145,19 @@ void CGame::Update(void)
 		}
 	}
 
+	// デバッグ表示の情報取得
+	CDebugProc* pDebugProc = CManager::GetInstance()->GetDebugProc();
+
+	// デバッグ表示
+	pDebugProc->Print("\nカウンター：%d\n", m_nTransition);
+
 #ifdef _DEBUG
-	if (pInputKeyboard->GetTrigger(DIK_RETURN) == true)
+	if (pInputKeyboard->GetTrigger(DIK_F2) == true)
 	{// ゲーム画面に遷移
 		CManager::GetInstance()->GetFade()->SetFade(CScene::MODE_TITLE);
 	}
 #endif
+
 }
 
 //========================================
@@ -127,14 +165,6 @@ void CGame::Update(void)
 //========================================
 void CGame::Draw(void)
 {
-}
-
-//========================================
-//設定
-//========================================
-void CGame::SetPlayer(CPlayer* pPlayer)
-{
-	m_pPlayer = pPlayer;
 }
 
 //========================================

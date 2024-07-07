@@ -10,12 +10,14 @@
 #include "texture.h"
 
 //========================================
-//マクロ定義
+// 定数定義
 //========================================
-#define POLYGON_TEX		"data/texture/block001.jpg"
-#define POLYGON_SIZE	(4000.0f)//マップサイズ
-#define BILL_WIDTH		(40)	//ビルボードの幅
-#define BILL_HEIGHT		(40)	//ビルボードの高さ
+namespace
+{
+	const float FIELD_SIZE = 4000.0f;		// フィールドのサイズ
+	const float BILLBOARD_WIDTH = 40.0f;	// ビルボードの幅
+	const float BILLBOARD_HEIGHT = 40.0f;	// ビルボードの高さ
+}
 
 //========================================
 //コンストラクタ
@@ -23,11 +25,9 @@
 CObject3D::CObject3D(int nPriority) :
 	CObject(nPriority)
 {
-	m_pTexture = nullptr;		//テクスチャへのポインタ
-	m_pVtxBuff = nullptr;		//頂点情報へのポインタ
-	m_mtxWorld;				//ワールドマトリックス
-	m_pos = D3DXVECTOR3(0.0f, 0.0f, 0.0f);	//位置
-	m_rot = D3DXVECTOR3(0.0f, 0.0f, 0.0f);	//向き
+	m_pTexture = nullptr;		// テクスチャへのポインタ
+	m_pVtxBuff = nullptr;		// 頂点情報へのポインタ
+	m_mtxWorld;					// ワールドマトリックス
 }
 
 //========================================
@@ -119,7 +119,8 @@ void CObject3D::Uninit(void)
 //========================================
 void CObject3D::Update(void)
 {
-
+	//頂点情報
+	SetVertex3D();
 }
 
 //========================================
@@ -127,7 +128,8 @@ void CObject3D::Update(void)
 //========================================
 void CObject3D::Draw(void)
 {
-	D3DXMATRIX mtxRot, mtxTrans;	//計算用マトリックス
+	//計算用マトリックス
+	D3DXMATRIX mtxRot, mtxTrans;
 
 	//CRenderer型のポインタ
 	CRenderer *pRenderer = CManager::GetInstance()->GetRenderer();
@@ -138,15 +140,19 @@ void CObject3D::Draw(void)
 	//CTexture型のポインタ
 	CTexture *pTexture = CManager::GetInstance()->GetTexture();
 
+	// 位置・向き取得
+	D3DXVECTOR3 Pos = GetPos();
+	D3DXVECTOR3 Rot = GetRot();
+
 	//ワールドマトリックスの初期化
 	D3DXMatrixIdentity(&m_mtxWorld);
 
 	//向きを反映
-	D3DXMatrixRotationYawPitchRoll(&mtxRot, m_rot.y, m_rot.x, m_rot.z);
+	D3DXMatrixRotationYawPitchRoll(&mtxRot, Rot.y, Rot.x, Rot.z);
 	D3DXMatrixMultiply(&m_mtxWorld, &m_mtxWorld, &mtxRot);
 
 	//位置を反映
-	D3DXMatrixTranslation(&mtxTrans, m_pos.x, m_pos.y, m_pos.z);
+	D3DXMatrixTranslation(&mtxTrans, Pos.x, Pos.y, Pos.z);
 	D3DXMatrixMultiply(&m_mtxWorld, &m_mtxWorld, &mtxTrans);
 
 	//ワールドマトリックスの設定
@@ -170,8 +176,6 @@ void CObject3D::Draw(void)
 //========================================
 void CObject3D::SetVertex3D(void)
 {
-	D3DXVECTOR3 vec1, vec2, nor;
-
 	//頂点情報へのポインタ
 	VERTEX_3D *pVtx;
 
@@ -179,22 +183,16 @@ void CObject3D::SetVertex3D(void)
 	m_pVtxBuff->Lock(0, 0, (void**)&pVtx, 0);
 
 	//頂点座標の設定
-	pVtx[0].pos = D3DXVECTOR3(-POLYGON_SIZE, 0.0f, POLYGON_SIZE);
-	pVtx[1].pos = D3DXVECTOR3(POLYGON_SIZE, 0.0f, POLYGON_SIZE);
-	pVtx[2].pos = D3DXVECTOR3(-POLYGON_SIZE, 0.0f, -POLYGON_SIZE);
-	pVtx[3].pos = D3DXVECTOR3(POLYGON_SIZE, 0.0f, -POLYGON_SIZE);
+	pVtx[0].pos = D3DXVECTOR3(-FIELD_SIZE, 0.0f, FIELD_SIZE);
+	pVtx[1].pos = D3DXVECTOR3(FIELD_SIZE, 0.0f, FIELD_SIZE);
+	pVtx[2].pos = D3DXVECTOR3(-FIELD_SIZE, 0.0f, -FIELD_SIZE);
+	pVtx[3].pos = D3DXVECTOR3(FIELD_SIZE, 0.0f, -FIELD_SIZE);
 
 	//法線の設定
 	pVtx[0].nor = D3DXVECTOR3(0.0f, 1.0f, 0.0f);
 	pVtx[1].nor = D3DXVECTOR3(0.0f, 1.0f, 0.0f);
 	pVtx[2].nor = D3DXVECTOR3(0.0f, 1.0f, 0.0f);
 	pVtx[3].nor = D3DXVECTOR3(0.0f, 1.0f, 0.0f);
-
-	//外積
-	D3DXVec3Cross(&nor, &vec1, &vec2);
-
-	//法線を正規化する
-	D3DXVec3Normalize(&nor, &nor);
 
 	//頂点カラーの設定
 	pVtx[0].col = D3DXCOLOR(1.0f, 1.0f, 1.0f, 1.0f);
@@ -336,6 +334,16 @@ void CObject3D::MeshVertex(void)
 }
 
 //========================================
+// フィールドの取得
+//========================================
+float CObject3D::GetField()
+{
+	float fField = FIELD_SIZE;
+
+	return fField;
+}
+
+//========================================
 //ビルボードの頂点情報
 //========================================
 void CObject3D::SetVerTexBillboard(void)
@@ -347,10 +355,10 @@ void CObject3D::SetVerTexBillboard(void)
 	m_pVtxBuff->Lock(0, 0, (void**)&pVtx, 0);
 
 	//頂点座標の設定
-	pVtx[0].pos = D3DXVECTOR3(- BILL_WIDTH, BILL_HEIGHT, 0.0f);
-	pVtx[1].pos = D3DXVECTOR3(BILL_WIDTH, BILL_HEIGHT, 0.0f);
-	pVtx[2].pos = D3DXVECTOR3(- BILL_WIDTH, - BILL_HEIGHT, 0.0f);
-	pVtx[3].pos = D3DXVECTOR3(BILL_WIDTH, - BILL_HEIGHT, 0.0f);
+	pVtx[0].pos = D3DXVECTOR3(-BILLBOARD_WIDTH, BILLBOARD_HEIGHT, 0.0f);
+	pVtx[1].pos = D3DXVECTOR3(BILLBOARD_WIDTH, BILLBOARD_HEIGHT, 0.0f);
+	pVtx[2].pos = D3DXVECTOR3(-BILLBOARD_WIDTH, -BILLBOARD_HEIGHT, 0.0f);
+	pVtx[3].pos = D3DXVECTOR3(BILLBOARD_WIDTH, -BILLBOARD_HEIGHT, 0.0f);
 
 	//法線の設定
 	pVtx[0].nor = D3DXVECTOR3(0.0f, 1.0f, 0.0f);
@@ -378,16 +386,6 @@ void CObject3D::SetVertex(void)
 {
 }
 
-void CObject3D::SetSize(float fWidht, float fHeight)
+void CObject3D::SetSize(float fWidth, float fHeight)
 {
-}
-
-//========================================
-//位置設定
-//========================================
-void CObject3D::SetPosition(D3DXVECTOR3 pos)
-{
-	m_pos = pos;
-
-	SetVertex3D();
 }

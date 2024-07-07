@@ -1,7 +1,7 @@
 //========================================
 //
-//フィールド[field.h]
-//Author：森川駿弥
+// フィールド[field.h]
+// Author：森川駿弥
 //
 //========================================
 #ifndef _FIELD_H_
@@ -19,7 +19,7 @@ public:
 	~CField();	//デストラクタ
 
 	//メンバ関数
-	static CField*Create(void);	//ポリゴン生成
+	static CField* Create(void);	//ポリゴン生成
 
 	HRESULT Init(void);		//初期化
 	void Uninit(void);		//終了

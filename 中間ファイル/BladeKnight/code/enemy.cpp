@@ -17,6 +17,9 @@
 #include "useful.h"
 #include "effect.h"
 #include "bullet.h"
+#include "useful.h"
+#include "sound.h"
+#include "fade.h"
 
 //========================================
 //名前空間
@@ -32,8 +35,12 @@ namespace
 	const float INERTIA = 0.1f;		// 慣性
 	const float RADIUS = 200.0f;	// 半径
 	const float NOCKBACK = 50.0f;	// ノックバック値
-
 }
+
+//========================================
+// 静的メンバ変数
+//========================================
+CEnemy* CEnemy::m_pEnemy = nullptr;
 
 //========================================
 //コンストラクタ
@@ -59,16 +66,14 @@ CEnemy::~CEnemy()
 //========================================
 CEnemy* CEnemy::Create(std::string pfile)
 {
-	CEnemy* pEnemy = nullptr;
+	if (m_pEnemy == nullptr)
+	{//	インスタンス生成
+		m_pEnemy = new CEnemy;
 
-	if (pEnemy == nullptr)
-	{
-		pEnemy = new CEnemy;
-
-		pEnemy->Init(pfile);
+		m_pEnemy->Init(pfile);
 	}
 
-	return pEnemy;
+	return m_pEnemy;
 }
 
 //========================================
@@ -105,7 +110,7 @@ HRESULT CEnemy::Init(std::string pfile)
 	// サイズ設定
 	m_pGauge->SetSize(50.0f, 50.0f);
 
-	// テクスチャ設定
+	// ゲージテクスチャ
 	m_pGauge->BindTexture(pTexture->Regist("data\\texture\\gauge.png"));
 
 	return S_OK;
@@ -118,6 +123,11 @@ void CEnemy::Uninit(void)
 {
 	// 終了
 	CCharacter::Uninit();
+
+	if (m_pEnemy != nullptr)
+	{
+		m_pEnemy = nullptr;
+	}
 
 	m_pGauge = nullptr;
 }
@@ -146,7 +156,7 @@ void CEnemy::Update(void)
 	D3DXVECTOR3 RotDest = GetRotDest();
 
 	// プレイヤー情報の取得
-	CPlayer* pPlayer = CGame::GetInstance()->GetPlayer();
+	CPlayer* pPlayer = CPlayer::GetInstance();
 
 	if (pPlayer != nullptr)
 	{
@@ -188,32 +198,35 @@ void CEnemy::Update(void)
 		pos.y = 0.0f;
 		move.y = 0.0f;
 	}
-
-	int nMode = CManager::GetInstance()->GetMode();
 	
 	// カウント加算
 	m_nCnt++;
 
 	if (m_nCnt >= ATTACKCOUNTER)
-	{
-		// 弾を飛ばす最大方向
-		int max = MAXDIRECTION;
-
+	{// 攻撃するまでの時間
 		m_bAttack = true;
 
-		for (int n = 0; n < max; n++)
+		for (int n = 0; n < MAXDIRECTION; n++)
 		{// 弾を8方向に飛ばす
-			float fAngle = D3DX_PI * 2.0f / max;
-			fAngle *= n;
+			float fAngle = D3DX_PI * 2.0f / MAXDIRECTION;
 
+			// 発射角度をずらす
+			fAngle *= n;
 			D3DXVECTOR3 bulletmove;
 			bulletmove.x = sinf(fAngle) * BULLETMOVE;
 			bulletmove.y = 0.0f;
 			bulletmove.z = cosf(fAngle) * BULLETMOVE;
 
 			// 弾の生成
-			CBullet::Create(pos, bulletmove, 300);
+			CBullet::Create(pos, bulletmove, 120);
 		}
+
+		// サウンド情報取得
+		CSound* pSound = CManager::GetInstance()->GetSound();
+
+		// サウンド再生
+		pSound->PlaySoundA(CSound::SOUND_LABEL_SE_BULLET);
+
 		m_nCnt = 0;
 	}
 
@@ -235,8 +248,8 @@ void CEnemy::Update(void)
 	// モーション管理
 	Motion();
 
-	// プレイヤーとの当たり判定
-	//CollisionPlayer(1);
+	// 闘技場との当たり判定
+	CollisionCircle();
 
 	// デバッグ表示
 	CDebugProc* pDebugProc = CManager::GetInstance()->GetDebugProc();
@@ -260,33 +273,74 @@ void CEnemy::Draw(void)
 //========================================
 void CEnemy::Hit(int nLife)
 {
+	//CInputKeyboard情報取得
+	CInputKeyboard* pInputKeyboard = CManager::GetInstance()->GetInputKeyboard();
+
+	//CInputPad情報取得
+	CInputPad* pInputPad = CManager::GetInstance()->GetInputPad();
+
 	D3DXVECTOR3 pos = GetPos();
 
 	//テクスチャのポインタ
 	CTexture* pTexture = CManager::GetInstance()->GetTexture();
 
+	// 状態取得
+	int nState = GetState();
+
+	int nCount = 0;
+
+	nCount++;
+
 	// 体力減らす
 	m_nLife -= nLife;
 
-	// ゲージに体力設定
-	m_pGauge->SetLife(m_nLife);
+	if (m_pGauge != nullptr)
+	{
+		// ゲージに体力設定
+		m_pGauge->SetLife(m_nLife);
+	}
 
 	if (m_nLife <= 0)
 	{
-		Uninit();
+		// 死亡状態
+		nState = STATE_DEATH;
 
 		// パーティクル生成
 		Myparticle::Create(Myparticle::TYPE_DEATH, pos);
 
+		// 終了
+		Uninit();
+
+		// 生成
 		CObject2D* pObje2D = CObject2D::Create();
 
+		// 位置設定
 		pObje2D->SetPos(D3DXVECTOR3(SCREEN_WIDTH * 0.5f, SCREEN_HEIGHT * 0.5f, 00.0f));
 
 		// サイズ設定
 		pObje2D->SetSize(1280.0f, 200.0f);
 
-		// 勝敗テクスチャ
+		// 勝利テクスチャ
 		pObje2D->BindTexture(pTexture->Regist("data\\texture\\win.png"));
+	
+		// サウンド情報取得
+		CSound* pSound = CManager::GetInstance()->GetSound();
+
+		// サウンド停止
+		pSound->Stop(CSound::SOUND_LABEL_BGM_GAME);
+
+		// サウンド再生
+		pSound->PlaySoundA(CSound::SOUND_LABEL_BGM_WIN);
+
+		//if (pInputKeyboard->GetTrigger(DIK_RETURN) == true ||
+		//	pInputPad->GetTrigger(CInputPad::BUTTON_START, 0) == true ||
+		//	nCount >= 120)
+		//{
+		//	// 画面遷移(フェード)
+		//	CManager::GetInstance()->GetFade()->SetFade(CScene::MODE_TITLE);
+
+		//	nCount = 0;
+		//}
 	}
 }
 
@@ -296,25 +350,28 @@ void CEnemy::Hit(int nLife)
 void CEnemy::NockBack()
 {
 	// 敵の情報取得
-	CPlayer* pPlayer = CGame::GetInstance()->GetPlayer();
+	CPlayer* pPlayer = CPlayer::GetInstance();
 
-	// 位置取得
-	D3DXVECTOR3 posEnemy = GetPos();
+	if (pPlayer != nullptr)
+	{
+		// 位置取得
+		D3DXVECTOR3 posEnemy = GetPos();
 
-	// プレイヤーの位置と移動量
-	D3DXVECTOR3 posPlayer = pPlayer->GetPos();
-	D3DXVECTOR3 movePlayer = pPlayer->GetMove();
+		// プレイヤーの位置と移動量
+		D3DXVECTOR3 posPlayer = pPlayer->GetPos();
+		D3DXVECTOR3 movePlayer = pPlayer->GetMove();
 
-	// 飛ばされる角度
-	float angle = atan2f(posEnemy.x - posEnemy.x, posPlayer.z - posEnemy.z);
+		// 飛ばされる角度
+		float angle = atan2f(posEnemy.x - posEnemy.x, posPlayer.z - posEnemy.z);
 
-	// 位置更新
-	movePlayer.x = sinf(angle) * -NOCKBACK;
-	movePlayer.z = cosf(angle) * -NOCKBACK;
-	movePlayer.y = 25.0f;
+		// 位置更新
+		movePlayer.x = sinf(angle) * -NOCKBACK;
+		movePlayer.z = cosf(angle) * -NOCKBACK;
+		movePlayer.y = 25.0f;
 
-	// 移動量設定
-	pPlayer->SetMove(movePlayer);
+		// 移動量設定
+		pPlayer->SetMove(movePlayer);
+	}
 }
 
 //========================================
@@ -401,7 +458,7 @@ void CEnemy::CollisionPlayer(int nDamage)
 	float fRadius = RADIUS;
 
 	// 敵の情報取得
-	CPlayer* pPlayer = CGame::GetInstance()->GetPlayer();
+	CPlayer* pPlayer = CPlayer::GetInstance();
 
 	if (pPlayer != nullptr)
 	{
@@ -426,4 +483,23 @@ void CEnemy::CollisionPlayer(int nDamage)
 			NockBack();
 		}
 	}
+}
+
+//========================================
+// 闘技場との当たり判定
+//========================================
+void CEnemy::CollisionCircle()
+{
+	// プレイヤー位置
+	D3DXVECTOR3 posEnemy = GetPos();
+	D3DXVECTOR3 vec;
+	D3DXVec3Normalize(&vec, &posEnemy);
+
+	if (USEFUL::CollisionCircle(posEnemy, Constance::ARENA_SIZE))
+	{// 闘技場に当たったら
+		posEnemy = vec * Constance::ARENA_SIZE;
+	}
+
+	// 位置設定
+	SetPos(posEnemy);
 }

@@ -21,25 +21,35 @@
 #include "motion.h"
 #include "effect.h"
 #include "object2D.h"
+#include "object3D.h"
+#include "sound.h"
+#include "fade.h"
 
 //========================================
-//名前空間
+// 定数定義
 //========================================
 namespace
 {
-	const int LIFE = 10;			// 体力
-	const float NOCKBACK = 50.0f;	// ノックバック値
-	const float SPEED = 4.0f;		// 速度
-	const float INERTIA = 0.3f;		// 慣性
-	const float RADIUS = 50.0f;		// 半径
+const int LIFE = 10;			// 体力
+const float NOCKBACK = 50.0f;	// ノックバック値
+const float SPEED = 4.0f;		// 速度
+const float INERTIA = 0.3f;		// 慣性
+const float RADIUS = 50.0f;		// 半径
+const float FIELD_LIMIT = 4000.0f;	// フィールドの大きさ
 }
+
+//========================================
+// 静的メンバ変数
+//========================================
+CPlayer* CPlayer::m_pPlayer = nullptr;
 
 //========================================
 //コンストラクタ
 //========================================
 CPlayer::CPlayer(int nPriority) : CCharacter(nPriority)
 {//値をクリア
-
+	m_WalkCounter = 0;
+	m_nCounter = 0;
 	m_pEffect = nullptr;			// エフェクトのポインタ
 	m_pGauge = nullptr;				// ゲージのポインタ
 	memset(&m_apModel[0], 0, sizeof(m_apModel));	//モデル情報
@@ -57,20 +67,17 @@ CPlayer::~CPlayer()
 //========================================
 CPlayer *CPlayer::Create(std::string pfile)
 {
-	//CPlayer型のポインタ
-	CPlayer *pPlayer = nullptr;
-
-	if (pPlayer == nullptr)
+	if (m_pPlayer == nullptr)
 	{
 		//プレイヤー生成
-		pPlayer = new CPlayer;
+		m_pPlayer = new CPlayer;
 
 		//初期化
-		pPlayer->Init(pfile);
+		m_pPlayer->Init(pfile);
 	}
 
 	//ポインタを返す
-	return pPlayer;
+	return m_pPlayer;
 }
 
 //========================================
@@ -90,6 +97,11 @@ HRESULT CPlayer::Init(std::string pfile)
 	// 向き設定
 	SetRot(D3DXVECTOR3(0.0f, 0.0f, 0.0f));
 
+	// 歩行時のカウンター
+	m_WalkCounter = 0;
+
+	m_nCounter = 0;
+
 	// 体力
 	m_nLife = LIFE;
 
@@ -102,7 +114,7 @@ HRESULT CPlayer::Init(std::string pfile)
 	// サイズ設定
 	m_pGauge->SetSize(50.0f, 50.0f);
 
-	// テクスチャ設定
+	// ゲージテクスチャ設定
 	m_pGauge->BindTexture(pTexture->Regist("data\\texture\\gauge.png"));
 
 	return S_OK;
@@ -113,11 +125,10 @@ HRESULT CPlayer::Init(std::string pfile)
 //========================================
 void CPlayer::Uninit(void)
 {
-	// 敵の情報取得
-	CGame::GetInstance()->SetPlayer(nullptr);
-
 	// 終了
 	CCharacter::Uninit();
+
+	m_pPlayer = nullptr;
 }
 
 //========================================
@@ -144,16 +155,59 @@ void CPlayer::Update(void)
 	CCamera* pCampera = CManager::GetInstance()->GetCamera();
 	pCampera->following(pos, rot);
 
+	//テクスチャのポインタ
+	CTexture* pTexture = CManager::GetInstance()->GetTexture();
+
 	// プレイヤー行動
 	Act(SPEED);
 
-	if (pInputKeyboard->GetTrigger(DIK_F1))
-	{
+#ifdef _DEBUG
+	if (pInputKeyboard->GetPress(DIK_F1))
+	{// 体力減算
 		Hit(1);
 	}
+#endif
 
 	// ゲージに体力設定
 	m_pGauge->SetLife(m_nLife);
+
+	// サウンド情報取得
+	CSound* pSound = CManager::GetInstance()->GetSound();
+
+	if (m_nLife <= 0)
+	{
+		// 生成
+		CObject2D* pObje2D = CObject2D::Create();
+
+		// 位置設定
+		pObje2D->SetPos(D3DXVECTOR3(SCREEN_WIDTH * 0.5f, SCREEN_HEIGHT * 0.5f, 0.0f));
+
+		// サイズ設定
+		pObje2D->SetSize(SCREEN_WIDTH, 200.0f);
+
+		// 敗北テクスチャ
+		pObje2D->BindTexture(pTexture->Regist("data\\texture\\lose.png"));
+
+		m_nCounter++;
+
+		if (pInputKeyboard->GetTrigger(DIK_RETURN) == true ||
+			pInputPad->GetTrigger(CInputPad::BUTTON_START, 0) == true)
+		{
+			// 画面遷移(フェード)
+			CManager::GetInstance()->GetFade()->SetFade(CScene::MODE_TITLE);
+
+			m_nCounter = 0;
+		}
+
+		// サウンド停止
+		pSound->Stop(CSound::SOUND_LABEL_BGM_GAME);
+
+		// サウンド再生
+		pSound->PlaySoundA(CSound::SOUND_LABEL_BGM_LOSE);
+
+		// 終了
+		Uninit();
+	}
 
 	// デバッグ表示の情報取得
 	CDebugProc* pDebugProc = CManager::GetInstance()->GetDebugProc();
@@ -214,8 +268,6 @@ void CPlayer::Act(float fSpeed)
 		if (pInputKeyboard->GetPress(DIK_W) == true
 			|| pInputPad->GetLStickYPress(CInputPad::BUTTON_L_STICK, 0) > 0)
 		{//左上
-			// パーティクル生成
-			Myparticle::Create(Myparticle::TYPE_WALK, pos);
 
 			// 歩き
 			m_bMove = true;
@@ -229,8 +281,6 @@ void CPlayer::Act(float fSpeed)
 		else if (pInputKeyboard->GetPress(DIK_S) == true
 			|| pInputPad->GetLStickYPress(CInputPad::BUTTON_L_STICK, 0) < 0)
 		{//左下
-			// パーティクル生成
-			Myparticle::Create(Myparticle::TYPE_WALK, pos);
 
 			// 歩き
 			m_bMove = true;
@@ -243,8 +293,6 @@ void CPlayer::Act(float fSpeed)
 		}
 		else
 		{//左
-			// パーティクル生成
-			Myparticle::Create(Myparticle::TYPE_WALK, pos);
 
 			// 歩き
 			m_bMove = true;
@@ -262,8 +310,6 @@ void CPlayer::Act(float fSpeed)
 		if (pInputKeyboard->GetPress(DIK_W) == true
 			|| pInputPad->GetLStickYPress(CInputPad::BUTTON_L_STICK, 0) > 0)
 		{//右上
-			// パーティクル生成
-			Myparticle::Create(Myparticle::TYPE_WALK, pos);
 
 			// 歩き
 			m_bMove = true;
@@ -277,8 +323,6 @@ void CPlayer::Act(float fSpeed)
 		else if (pInputKeyboard->GetPress(DIK_S) == true
 			|| pInputPad->GetLStickXPress(CInputPad::BUTTON_L_STICK, 0) > 0)
 		{//右下
-			// パーティクル生成
-			Myparticle::Create(Myparticle::TYPE_WALK, pos);
 
 			// 歩き
 			m_bMove = true;
@@ -291,8 +335,6 @@ void CPlayer::Act(float fSpeed)
 		}
 		else
 		{//右
-			// パーティクル生成
-			Myparticle::Create(Myparticle::TYPE_WALK, pos);
 
 			// 歩き
 			m_bMove = true;
@@ -307,8 +349,6 @@ void CPlayer::Act(float fSpeed)
 	else if (pInputKeyboard->GetPress(DIK_W) == true
 		|| pInputPad->GetLStickYPress(CInputPad::BUTTON_L_STICK, 0) > 0)
 	{//Wが押された
-		// パーティクル生成
-		Myparticle::Create(Myparticle::TYPE_WALK, pos);
 
 		// 歩き
 		m_bMove = true;
@@ -322,8 +362,7 @@ void CPlayer::Act(float fSpeed)
 	else if (pInputKeyboard->GetPress(DIK_S) == true
 		|| pInputPad->GetLStickYPress(CInputPad::BUTTON_L_STICK, 0) < 0)
 	{//Sが押された
-		// パーティクル生成
-		Myparticle::Create(Myparticle::TYPE_WALK, pos);
+		
 
 		// 歩き
 		m_bMove = true;
@@ -335,13 +374,28 @@ void CPlayer::Act(float fSpeed)
 		RotDest.y = Camrot.y + D3DX_PI;
 	}
 
-	//位置を更新
-	pos.x += move.x;
-	pos.z += move.z;
+	if (m_bMove)
+	{//位置を更新
+		pos += move;
 
-	//移動量を更新(減衰させる)
-	move.x += (0.0f - move.x) * INERTIA;
-	move.z += (0.0f - move.z) * INERTIA;
+		//移動量を更新(減衰させる)
+		move.x += (0.0f - move.x) * INERTIA;
+		move.z += (0.0f - move.z) * INERTIA;
+
+		m_WalkCounter = (m_WalkCounter + 1) % 20;
+
+		if (m_WalkCounter == 0)
+		{
+			// パーティクル生成
+			Myparticle::Create(Myparticle::TYPE_WALK, pos);
+
+			// サウンド情報取得
+			CSound* pSound = CManager::GetInstance()->GetSound();
+
+			// サウンド再生
+			pSound->PlaySoundA(CSound::SOUND_LABEL_SE_WALK);
+		}
+	}
 
 	//目的の向き
 	DiffRot.y = RotDest.y - rot.y;
@@ -373,8 +427,11 @@ void CPlayer::Act(float fSpeed)
 	// モーション
 	Motion();
 
-	// 敵との当たり判定
-	//CollisionEnemy(1);5
+	// フィールドとの当たり判定
+	CollisionField();
+
+	// 闘技場との当たり判定
+	CollisionCircle();
 }
 
 //========================================
@@ -399,6 +456,8 @@ void CPlayer::Attack()
 	{// 切りおろし
 		m_bCutdown = true;
 
+		m_bMove = false;
+
 		// 敵との当たり判定
 		CollisionEnemy(1);
 	}
@@ -408,6 +467,8 @@ void CPlayer::Attack()
 	{// 横薙ぎ
 		m_bMowingdown = true;
 
+		m_bMove = false;
+
 		// 敵との当たり判定
 		CollisionEnemy(2);
 	}
@@ -416,6 +477,8 @@ void CPlayer::Attack()
 		|| pInputPad->GetTrigger(CInputPad::BUTTON_RB, 0) == true)
 	{// 強攻撃
 		m_bStrongAttack = true;
+
+		m_bMove = false;
 
 		// 敵との当たり判定
 		CollisionEnemy(3);
@@ -492,9 +555,6 @@ void CPlayer::CollisionEnemy(int nDamage)
 	// モデルのマトリックス取得
 	D3DXMATRIX MtxModel = pModelOffset->GetMtxWorld();
 
-	// 位置取得
-	D3DXVECTOR3 posPlayer = GetPos();
-
 	//位置を反映
 	D3DXMatrixTranslation(&mtxTrans, 0.0f, 150.0f, 0.0f);
 	D3DXMatrixMultiply(&posWeapon, &mtxTrans, &MtxModel);
@@ -514,7 +574,7 @@ void CPlayer::CollisionEnemy(int nDamage)
 	float fRadius = RADIUS;
 
 	// 敵の情報取得
-	CEnemy* pEnemy = CGame::GetInstance()->GetEnemy();
+	CEnemy* pEnemy = CEnemy::GetInstance();
 
 	if (pEnemy != nullptr)
 	{
@@ -543,6 +603,12 @@ void CPlayer::CollisionEnemy(int nDamage)
 
 			// ノックバック
 			NockBack();
+
+			// サウンド情報取得
+			CSound* pSound = CManager::GetInstance()->GetSound();
+
+			// サウンド再生
+			pSound->PlaySoundA(CSound::SOUND_LABEL_SE_ENEMYHIT);
 		}
 	}
 }
@@ -553,25 +619,28 @@ void CPlayer::CollisionEnemy(int nDamage)
 void CPlayer::NockBack()
 {
 	// 敵の情報取得
-	CEnemy* pEnemy = CGame::GetInstance()->GetEnemy();
+	CEnemy* pEnemy = CEnemy::GetInstance();
 
 	// 位置取得
 	D3DXVECTOR3 posPlayer = GetPos();
 
-	// 敵の位置と移動量
-	D3DXVECTOR3 posEnemy = pEnemy->GetPos();
-	D3DXVECTOR3 moveEnemy = pEnemy->GetMove();
+	if (pEnemy != nullptr)
+	{
+		// 敵の位置と移動量
+		D3DXVECTOR3 posEnemy = pEnemy->GetPos();
+		D3DXVECTOR3 moveEnemy = pEnemy->GetMove();
 
-	// 飛ばされる向き
-	float angle = atan2f(posPlayer.x - posEnemy.x, posPlayer.z - posEnemy.z);
+		// 飛ばされる向き
+		float angle = atan2f(posPlayer.x - posEnemy.x, posPlayer.z - posEnemy.z);
 
-	// 位置更新
-	moveEnemy.x = sinf(angle) * -NOCKBACK;
-	moveEnemy.z = cosf(angle) * -NOCKBACK;
+		// 位置更新
+		moveEnemy.x = sinf(angle) * -NOCKBACK;
+		moveEnemy.z = cosf(angle) * -NOCKBACK;
 
-	moveEnemy.y = 25.0f;
+		moveEnemy.y = 25.0f;
 
-	pEnemy->SetMove(moveEnemy);
+		pEnemy->SetMove(moveEnemy);
+	}
 }
 
 //========================================
@@ -579,10 +648,13 @@ void CPlayer::NockBack()
 //========================================
 void CPlayer::Hit(int nLife)
 {
-	D3DXVECTOR3 pos = GetPos();
+	// サウンド情報取得
+	CSound* pSound = CManager::GetInstance()->GetSound();
 
-	//テクスチャのポインタ
-	CTexture* pTexture = CManager::GetInstance()->GetTexture();
+	// サウンド再生
+	pSound->PlaySoundA(CSound::SOUND_LABEL_SE_HIT);
+
+	D3DXVECTOR3 pos = GetPos();
 
 	// 体力減らす
 	m_nLife -= nLife;
@@ -592,19 +664,59 @@ void CPlayer::Hit(int nLife)
 
 	// パーティクル生成
 	Myparticle::Create(Myparticle::TYPE_DEATH, pos);
+}
 
-	if (m_nLife <= 0)
+//========================================
+// フィールド外に行かないよう
+//========================================
+void CPlayer::CollisionField()
+{
+	// 位置・移動量取得
+	D3DXVECTOR3 posPlayer = GetPos();
+	D3DXVECTOR3 movePlayer = GetMove();
+
+	if (posPlayer.x > FIELD_LIMIT)
 	{
-		Uninit();
-
-		CObject2D* pObje2D = CObject2D::Create();
-
-		pObje2D->SetPos(D3DXVECTOR3(SCREEN_WIDTH * 0.5f, SCREEN_HEIGHT * 0.5f, 00.0f));
-
-		// サイズ設定
-		pObje2D->SetSize(1280.0f, 200.0f);
-
-		// 勝敗テクスチャ
-		pObje2D->BindTexture(pTexture->Regist("data\\texture\\lose.png"));
+		posPlayer.x = FIELD_LIMIT;
+		movePlayer.x = 0.0f;
 	}
+	else if (posPlayer.x < -FIELD_LIMIT)
+	{
+		posPlayer.x = -FIELD_LIMIT;
+		movePlayer.x = 0.0f;
+
+	}
+	if (posPlayer.z > FIELD_LIMIT)
+	{
+		posPlayer.z = FIELD_LIMIT;
+		movePlayer.z = 0.0f;
+	}
+	else if (posPlayer.z < -FIELD_LIMIT)
+	{
+		posPlayer.z = -FIELD_LIMIT;
+		movePlayer.z = 0.0f;
+	}
+
+	// 位置・移動量設定
+	SetPos(posPlayer);
+	SetMove(movePlayer);
+}
+
+//========================================
+// 闘技場との判定
+//========================================
+void CPlayer::CollisionCircle()
+{
+	// プレイヤー位置
+	D3DXVECTOR3 posPlayer = GetPos();
+	D3DXVECTOR3 vec;
+	D3DXVec3Normalize(&vec, &posPlayer);
+
+	if (USEFUL::CollisionCircle(posPlayer, Constance::ARENA_SIZE))
+	{// 闘技場に当たったら
+		posPlayer = vec * Constance::ARENA_SIZE;
+	}
+
+	// 位置設定
+	SetPos(posPlayer);
 }

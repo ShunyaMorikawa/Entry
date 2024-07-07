@@ -1,18 +1,13 @@
 //========================================
 //
-//シューティングアクション[polygon.cpp]
-//Author：森川駿弥
+// フィールド[field.cpp]
+// Author：森川駿弥
 //
 //========================================
 #include "field.h"
 #include "manager.h"
 #include "renderer.h"
 #include "texture.h"
-
-//========================================
-//マクロ定義
-//========================================
-#define POLYGON_TEX		"data\\texture\\soil.jpg"
 
 //========================================
 //静的メンバ変数
@@ -37,22 +32,16 @@ CField::~CField()
 //========================================
 //ポリゴン生成
 //========================================
-CField *CField::Create(void)
+CField* CField::Create(void)
 {
 	//CPlayer型のポインタ
-	CField *pPolygon = nullptr;
+	CField* pField = new CField;;
 
-	if (pPolygon == nullptr)
-	{
-		//プレイヤー生成
-		pPolygon = new CField;
-
-		//初期化
-		pPolygon->Init();
-	}
+	//初期化
+	pField->Init();
 
 	//ポインタを返す
-	return pPolygon;
+	return pField;
 }
 
 //========================================
@@ -67,7 +56,8 @@ HRESULT CField::Init(void)
 	CObject3D::Init();
 
 	//テクスチャ割り当て
-	BindTexture(pTexture->Regist(POLYGON_TEX));
+	BindTexture(pTexture->Regist("data\\texture\\soil.jpg"));
+
 
 	return S_OK;
 }
@@ -77,6 +67,8 @@ HRESULT CField::Init(void)
 //========================================
 void CField::Uninit(void)
 {
+	// 継承の初期化
+	CObject3D::Uninit();
 }
 
 //========================================
@@ -84,6 +76,8 @@ void CField::Uninit(void)
 //========================================
 void CField::Update(void)
 {
+	// 継承の初期化
+	CObject3D::Update();
 }
 
 //========================================

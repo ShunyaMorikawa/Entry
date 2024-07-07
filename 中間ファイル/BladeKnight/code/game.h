@@ -21,11 +21,16 @@ class CField;
 class CEnemy;
 class CFade;
 class CGauge;
+class CWall;
+class CMapObject;
 
 //========================================
-//マクロ
+// 定数定義
 //========================================
-#define MAX_ITEM	(256)	//アイテムの最大数
+namespace
+{
+const int ITEM_MAX = 256;	// アイテムの最大数
+}
 
 //========================================
 //ゲームクラス
@@ -45,25 +50,20 @@ public:
 	void Draw(void);
 	void PauseState(bool bPauseState) { m_bPause = bPauseState; }	//ポーズ状態かどうか
 
-	void SetPlayer(CPlayer* pPlayer);
-	CPlayer *GetPlayer() { return m_pPlayer; }	// プレイヤーの取得
-	CPlayer **GetPlayerPtr() { return &m_pPlayer; }	// プレイヤーの取得
-	CEnemy* GetEnemy() { return m_pEnemy; }		// 敵の情報取得
 	static CGame *GetInstance(void);		// ゲームマネージャーの情報
 	
 private:
-	static CGame *m_pGame;				// ゲームマネージャーのポインタ
+	static CGame *m_pGame;					// ゲームマネージャーのポインタ
 
 	int m_nTransition;
 
 	bool m_bPause;				// ポーズ状態のON/OFF
 
 	CObjectX *m_pObjectX;		// Xファイルオブジェクトのポインタ
-	CPlayer *m_pPlayer;			// プレイヤーのポインタ
 	CIdxMeshField *m_pIdxMesh;	// メッシュフィールドのポインタ
 	CField *m_pField;			// ポリゴンのポインタ
-	CEnemy* m_pEnemy;			// 敵のポインタ
 	CFade* m_pFade;				// フェードのポインタ
+	CMapObject* m_pMobj;		// マップオブジェクトのポインタ
 };
 
 #endif

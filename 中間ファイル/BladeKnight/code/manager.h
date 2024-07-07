@@ -26,6 +26,7 @@ class CLight;
 class CResult;
 class CTutorial;
 class CFade;
+class CSound;
 
 //========================================
 //シーンクラス
@@ -39,7 +40,6 @@ public:
 		MODE_TITLE,		//タイトル
 		MODE_TUTORIAL,	//チュートリアル
 		MODE_GAME,		//ゲーム
-		MODE_RESULT,	//リザルト
 		MODE_MAX
 	};
 
@@ -90,6 +90,7 @@ public:
 	CScene::MODE GetMode(void) { return m_pScene->GetMode(); }	//モード取得
 	CCamera *GetCamera(void) { return m_pCamera; }
 	CFade* GetFade() { return m_pFade; }
+	CSound* GetSound() { return m_pSound; }
 
 	bool bResult();
 
@@ -113,6 +114,7 @@ private:
 	CCamera *m_pCamera;			// カメラのポインタ
 	CLight* m_pLight;			// ライトのポインタ
 	CFade* m_pFade;				// フェードのポインタ
+	CSound* m_pSound;			// サウンドのポインタ
 };
 
 #endif

@@ -32,10 +32,13 @@ public:
 	void NockBack();
 	void Motion();
 	void CollisionPlayer(int nDamage);
+	void CollisionCircle();
 
 	int GetLife() { return m_nLife; }			// 体力取得
 
 	float GetRadius() { return m_fRadius; }		// 半径取得
+
+	static CEnemy* GetInstance() { return m_pEnemy; }
 
 private:
 	//メンバ変数
@@ -48,6 +51,8 @@ private:
 	bool m_bAttack;		// 攻撃判定
 
 	CGauge* m_pGauge;	// ゲージのポインタ
+
+	static CEnemy* m_pEnemy;	// 自身のポインタ
 };
 
 #endif
